@@ -22,9 +22,11 @@ To view, browse to http://localhost:5000/
 - `03-query-parameters`- Use query parameter to find a random movie related to a movie
 - `04-write-transactions`- Save the User's ratings into the graph using a write transaction, then provide a recommendation based on the similarity in taste to other users
 
-# Deploying to Kubernetes
 
-## Build a Docker image for the app
+
+## Deploying to Kubernetes
+
+First we need to create a Docker image for the app:
 
 ```
 docker run -v  ~/Downloads/k8s-import:/var/lib/neo4j/import -p 7474:7474 -p 7687:7687 -v $PWD/data:/data neo4j
