@@ -4,13 +4,16 @@ import json
 import uuid
 from flask import Flask, abort, render_template, request, jsonify
 from neo4j.v1 import GraphDatabase
+import os
 
 app = Flask(__name__)
 
+host = os.getenv("NEO4J_HOST")
+password = os.getenv("NEO4J_PASSWORD")
+
 # Set up a driver for the recommendation graph database.
-uri = "bolt://54.173.14.47:32973"
+uri = "bolt://{host}".format(host=host)
 username = "neo4j"
-password = "rounds-discontinuances-remedy"
 
 driver = GraphDatabase.driver(uri, auth=(username, password))
 
@@ -28,7 +31,7 @@ def match_random_movie(tx, genre, ignore):
     cypher += "RETURN g, m  ORDER BY RAND() LIMIT 1"
 
     record = tx.run(cypher, genre=genre, ignore=ignore).single()
-    return dict(record[0]), dict(record[1]) if record else None
+    return dict(record[0]), dict(record[1]) if record else (None,None)
 
 def save_ratings(tx, user_id, genre, ratings):
     """ Merge the User node by User ID
@@ -46,19 +49,22 @@ def save_ratings(tx, user_id, genre, ratings):
 def get_recommendation(tx, user_id, genre):
     """ Get a recommendation
     """
-    record = tx.run("MATCH (g:Genre {name: $genre}) "
-                    "MATCH (u:User {userId: $user_id})-[x:RATED]->()<-[y:RATED]-(other) "
-                    "WITH g, u, other, COUNT(*) AS numbermovies, SUM(x.rating * y.rating) AS xyDotProduct, "
-                    "SQRT(REDUCE(xDot = 0.0, a IN COLLECT(x.rating) | xDot + a^2)) AS xLength, "
-                    "SQRT(REDUCE(yDot = 0.0, b IN COLLECT(y.rating) | yDot + b^2)) AS yLength "
-                    "WITH g, u, other, xyDotProduct / (xLength * yLength) AS sim "
-                    "ORDER BY sim DESC LIMIT 10 "
-                    "MATCH (other)-[r:RATED]->(recommendation)-[:IN_GENRE]->(g) "
-                    "WHERE r.rating >= 4 AND NOT (u)-[:RATED]->(recommendation) "
-                    "RETURN g, recommendation, count(*) as occurrences "
-                    "ORDER BY occurrences DESC LIMIT 1", user_id=user_id, genre=genre).single()
 
-    return dict(record[0]), dict(record[1]) if record else None
+    query = """MATCH (g:Genre {name: $genre})
+            MATCH (u:User {userId: $user_id})-[x:RATED]->()<-[y:RATED]-(other)
+            WITH g, u, other, COUNT(*) AS numbermovies, SUM(x.rating * y.rating) AS xyDotProduct,
+            SQRT(REDUCE(xDot = 0.0, a IN COLLECT(x.rating) | xDot + a^2)) AS xLength,
+            SQRT(REDUCE(yDot = 0.0, b IN COLLECT(y.rating) | yDot + b^2)) AS yLength
+            WITH g, u, other, xyDotProduct / (xLength * yLength) AS sim
+            ORDER BY sim DESC LIMIT 10
+            MATCH (other)-[r:RATED]->(recommendation)-[:IN_GENRE]->(g)
+            WHERE r.rating >= 4 AND NOT (u)-[:RATED]->(recommendation)
+            RETURN g, recommendation, count(*) as occurrences
+            ORDER BY occurrences DESC LIMIT 1"""
+
+    record = tx.run(query, user_id=user_id, genre=genre).single()
+
+    return dict(record[0]), dict(record[1]) if record else (None,None)
 
 @app.route("/")
 def get_index():
@@ -73,12 +79,15 @@ def start_recommendation(genre):
     """
     with driver.session() as session:
         genre, movie = session.read_transaction(match_random_movie, genre, [])
+        print(genre, movie)
         return render_template("rate.html", genre=genre, movie=movie)
 
 @app.route("/recommend/<genre>/next")
 def get_next_movie(genre):
     with driver.session() as session:
-        ignore = request.args.get("rated", "").split(",")
+        ignore_param = request.args.get("rated", "")
+        ignore = ignore_param.split(",") if ignore_param else []
+
         genre, movie = session.read_transaction(match_random_movie, genre, ignore)
         return jsonify(movie)
 
@@ -94,4 +103,3 @@ def get_results(genre):
         genre, movie = session.read_transaction(get_recommendation, user_id, genre)
 
         return render_template("result.html", genre=genre, movie=movie)
-
