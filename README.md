@@ -23,7 +23,7 @@ To view, browse to http://localhost:5000/
 - `04-write-transactions`- Save the User's ratings into the graph using a write transaction, then provide a recommendation based on the similarity in taste to other users
 
 
-## Deploying to Kubernetes
+## Deploying to Kubernetes
 
 First we need to create a Docker image for the app:
 
