@@ -33,20 +33,42 @@ eval $(minikube docker-env)
 docker build -t python-k8s-example .
 ```
 
-```
-kubectl cp /Users/markneedham/projects/realtime-ny2017/import neo4j-core-0:/var/lib/neo4j/import
-kubectl exec neo4j-core-0 --  bash -c 'cat /import.cypher | bin/cypher-shell -u neo4j -p neo'
+Get the store from https://s3.amazonaws.com/neo4j-sandbox-usecase-datastores/v3_2/recommendations.db.zip.
+Unpack it and tar it up instead:
 
+```
+tar -cvf graph.db.tar.gz graph.db/
+```
+
+Create the persistent volume claims and data loading pods:
+
+```
+./k8s/pvs.sh
+```
+
+Load the data onto the persistent volumes (via the data loading pods):
+
+```
 for i in $(seq 0 2); do
   kubectl cp graph.db.tar.gz neo4j-load-data-${i}:/data/
   kubectl exec neo4j-load-data-${i} -- bash -c "mkdir -p /data/databases && tar -xf  /data/graph.db.tar.gz -C /data/databases"
 done
+```
 
+Delete the data loading pods:
+
+```
 kubectl delete pods -l app=neo4j-loader
 ```
+
+Deploy the Neo4j cluster using the https://github.com/neo4j-contrib/kubernetes-neo4j[kubernetes-neo4j^] repository:
+
+```
+kubectl apply -f cores
+```
+
+Deploy the app:
 
 ```
 kubectl apply -f k8s/deployment.yaml
 ```
-
-https://justinrodenbostel.com/2016/06/06/configuring-persistence-storage-with-docker-and-kubernetes/
