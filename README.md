@@ -25,7 +25,6 @@ To view, browse to http://localhost:5000/
 
 
 ## Deploying to Kubernetes
-
 First we need to create a Docker image for the app:
 
 ```
