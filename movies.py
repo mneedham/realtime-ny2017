@@ -12,7 +12,8 @@ host = os.getenv("NEO4J_HOST")
 password = os.getenv("NEO4J_PASSWORD")
 
 # Set up a driver for the recommendation graph database.
-uri = "bolt://{host}".format(host=host)
+uri = "bolt+routing://{host}".format(host=host)
+# uri = "bolt://{host}".format(host=host)
 username = "neo4j"
 
 driver = GraphDatabase.driver(uri, auth=(username, password))
@@ -30,21 +31,25 @@ def match_random_movie(tx, genre, ignore):
 
     cypher += "RETURN g, m  ORDER BY RAND() LIMIT 1"
 
-    record = tx.run(cypher, genre=genre, ignore=ignore).single()
+    result = tx.run(cypher, genre=genre, ignore=ignore)
+    print("Read query executed: " + str(result.summary().server.address))
+    record = result.single()
     return dict(record[0]), dict(record[1]) if record else (None,None)
 
 def save_ratings(tx, user_id, genre, ratings):
     """ Merge the User node by User ID
     """
-    tx.run("MERGE (u:User {userId: $user_id})", user_id=user_id)
+    result = tx.run("MERGE (u:User {userId: $user_id})", user_id=user_id)
+    print("Write query executed: " + str(result.summary().server.address))
 
     """ Save each rating
     """
     for movieId, rating in ratings.items():
-        tx.run("MATCH (u:User {userId: $user_id}) "
-               "MATCH (m:Movie {imdbId: $movie_id}) "
-               "MERGE (u)-[r:RATED]->(m) "
-               "SET r.rating = $rating ", user_id=user_id, movie_id=movieId, rating=rating)
+        result = tx.run("MATCH (u:User {userId: $user_id}) "
+                        "MATCH (m:Movie {imdbId: $movie_id}) "
+                        "MERGE (u)-[r:RATED]->(m) "
+                        "SET r.rating = $rating ", user_id=user_id, movie_id=movieId, rating=rating)
+        print("Write query executed: " + str(result.summary().server.address))
 
 def get_recommendation(tx, user_id, genre):
     """ Get a recommendation
@@ -62,7 +67,9 @@ def get_recommendation(tx, user_id, genre):
             RETURN g, recommendation, count(*) as occurrences
             ORDER BY occurrences DESC LIMIT 1"""
 
-    record = tx.run(query, user_id=user_id, genre=genre).single()
+    result = tx.run(query, user_id=user_id, genre=genre)
+    print("Read query executed: " + str(result.summary().server.address))
+    record = result.single()
 
     return dict(record[0]), dict(record[1]) if record else (None,None)
 

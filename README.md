@@ -32,6 +32,9 @@ docker run -v  ~/Downloads/k8s-import:/var/lib/neo4j/import -p 7474:7474 -p 7687
 docker exec -i <docker-container-id> bash -c 'cat /import.cypher | bin/cypher-shell -u neo4j -p neo'
 eval $(minikube docker-env)
 docker build -t python-k8s-example .
+
+docker tag 863927cb6a74 markhneedham/python-k8s-example:v0.0.1
+docker push markhneedham/python-k8s-example
 ```
 
 Get the store from https://s3.amazonaws.com/neo4j-sandbox-usecase-datastores/v3_2/recommendations.db.zip.
